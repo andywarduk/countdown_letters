@@ -48,7 +48,7 @@ pub fn print_results(mut words: Vec<String>) {
     };
 
     for (wordlen, start, end) in groups {
-        println!("{} letter words ({}):", wordlen, end - start);
+        println!("== {} letter words ({}) ==", wordlen, end - start);
 
         let cols = if term_width > 0 {
             max(1, (term_width as usize - 1) / (wordlen + 2))

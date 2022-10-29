@@ -2,26 +2,47 @@ use std::collections::HashSet;
 
 use crate::dictionary::{LetterNext, LetterVec};
 
-pub fn find_words(letters: &str, dictionary: &Vec<LetterVec>, min_len: u8) -> Vec<String> {
+/// Arguments for the countdown letters solver
+pub struct SolverArgs<'a> {
+    /// String of letters to use (must be upper case A-Z)
+    pub letters: &'a str,
+    /// Dictionary to use
+    pub dictionary: &'a Vec<LetterVec>,
+    /// Minimum length word to find
+    pub min_len: u8,
+    /// Letters can be reused flag
+    pub reuse_letters: bool,
+}
+
+pub fn find_words(args: SolverArgs) -> Vec<String> {
     let mut result = HashSet::new();
 
     // Dictionary entry element numbers for each letter
-    let letter_elems = letters.chars().map(|c| c as u8 - b'A').collect::<Vec<u8>>();
+    let mut letter_elems = args
+        .letters
+        .chars()
+        .map(|c| c as u8 - b'A')
+        .collect::<Vec<u8>>();
+
+    if args.reuse_letters {
+        // Remove duplicate entries if allowed to reuse letters
+        letter_elems.sort();
+        letter_elems.dedup();
+    }
 
     // Vector of chosen letter elements
-    let mut chosen = Vec::with_capacity(letters.len());
+    let mut chosen = Vec::with_capacity(letter_elems.len());
 
     // Been chosen indicators
-    let mut is_chosen = vec![false; letters.len()];
+    let mut is_chosen = vec![false; letter_elems.len()];
 
     // Start search recursion
     find_words_rec(
+        &args,
         &mut chosen,
         &mut is_chosen,
         &letter_elems,
-        dictionary,
         0,
-        min_len,
         &mut result,
     );
 
@@ -30,16 +51,15 @@ pub fn find_words(letters: &str, dictionary: &Vec<LetterVec>, min_len: u8) -> Ve
 }
 
 fn find_words_rec(
+    args: &SolverArgs,
     chosen: &mut Vec<u8>,
     is_chosen: &mut Vec<bool>,
     letter_elems: &[u8],
-    dictionary: &Vec<LetterVec>,
     dict_elem: usize,
-    min_len: u8,
     result: &mut HashSet<String>,
 ) {
     for i in 0..letter_elems.len() {
-        if is_chosen[i] {
+        if is_chosen[i] && !args.reuse_letters {
             // This letter has already been chosen
             continue;
         }
@@ -51,12 +71,12 @@ fn find_words_rec(
         chosen.push(chosen_letter);
 
         // Walk the dictionary
-        let dict_elem = dictionary[dict_elem][chosen_letter as usize];
+        let dict_elem = args.dictionary[dict_elem][chosen_letter as usize];
 
         // End of a word?
         match dict_elem {
             LetterNext::End | LetterNext::EndNext(_) => {
-                if chosen.len() >= min_len as usize {
+                if chosen.len() >= args.min_len as usize {
                     // SAFETY: Guaranteed to be upper case ASCII characters only
                     let string = chosen
                         .iter()
@@ -73,16 +93,8 @@ fn find_words_rec(
             LetterNext::Next(e) | LetterNext::EndNext(e) => {
                 is_chosen[i] = true;
 
-                find_words_rec(
-                    chosen,
-                    is_chosen,
-                    letter_elems,
-                    dictionary,
-                    e as usize,
-                    min_len,
-                    result,
-                );
-                
+                find_words_rec(args, chosen, is_chosen, letter_elems, e as usize, result);
+
                 is_chosen[i] = false;
             }
             _ => (),
