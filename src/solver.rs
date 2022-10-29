@@ -5,10 +5,14 @@ use crate::dictionary::{LetterNext, LetterVec};
 pub fn find_words(letters: &str, dictionary: &Vec<LetterVec>, min_len: u8) -> Vec<String> {
     let mut result = HashSet::new();
 
+    let letter_chars = letters.chars().collect();
+    let mut is_chosen = (0..letters.len()).map(|_| false).collect::<Vec<bool>>();
+
     find_words_rec(
-        vec![],
+        &mut vec![],
         0,
-        letters.chars().collect(),
+        &letter_chars,
+        &mut is_chosen,
         dictionary,
         min_len,
         &mut result,
@@ -18,33 +22,39 @@ pub fn find_words(letters: &str, dictionary: &Vec<LetterVec>, min_len: u8) -> Ve
 }
 
 fn find_words_rec(
-    chosen: Vec<char>,
+    chosen: &mut Vec<char>,
     elem: usize,
-    left: Vec<char>,
+    letters: &Vec<char>,
+    is_chosen: &mut Vec<bool>,
     dictionary: &Vec<LetterVec>,
     min_len: u8,
     result: &mut HashSet<String>,
 ) {
-    let found_word = |chosen: &Vec<char>, letter, result: &mut HashSet<String>| {
-        let s = format!("{}{}", chosen.iter().collect::<String>(), letter);
-
-        if s.len() >= min_len as usize {
+    let found_word = |chosen: &Vec<char>, result: &mut HashSet<String>| {
+        if chosen.len() >= min_len as usize {
+            let s = chosen.iter().collect::<String>();
             result.insert(s);
         }
     };
 
-    for i in 0..left.len() {
-        let chosen_char = left[i];
+    for i in 0..letters.len() {
+        if is_chosen[i] {
+            continue
+        }
+
+        let chosen_char = letters[i];
+
+        chosen.push(chosen_char);
 
         let new_elem = match dictionary[elem][uchar_to_elem(chosen_char)] {
             LetterNext::None => None,
             LetterNext::Next(e) => Some(e as usize),
             LetterNext::End => {
-                found_word(&chosen, chosen_char, result);
+                found_word(chosen, result);
                 None
             }
             LetterNext::EndNext(e) => {
-                found_word(&chosen, chosen_char, result);
+                found_word(chosen, result);
                 Some(e as usize)
             }
         };
@@ -52,14 +62,13 @@ fn find_words_rec(
         match new_elem {
             None => (),
             Some(e) => {
-                let mut new_left = left.clone();
-                new_left.remove(i);
-                let mut new_chosen = chosen.clone();
-                new_chosen.push(chosen_char);
-
-                find_words_rec(new_chosen, e, new_left, dictionary, min_len, result);
+                is_chosen[i] = true;
+                find_words_rec(chosen, e, letters, is_chosen, dictionary, min_len, result);
+                is_chosen[i] = false;
             }
         }
+
+        chosen.pop();
     }
 }
 
