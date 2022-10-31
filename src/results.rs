@@ -2,6 +2,8 @@ use std::cmp::{max, Ordering};
 
 use terminal_size::{terminal_size, Width};
 
+use crate::numformat::NumFormat;
+
 pub fn print_results(mut words: Vec<String>) {
     // Sort words by longest first then alphabetical
     words.sort_by(|a, b| {
@@ -16,7 +18,7 @@ pub fn print_results(mut words: Vec<String>) {
 
     println!(
         "{} {} found",
-        words.len(),
+        words.len().num_format(),
         if words.len() == 1 { "word" } else { "words" }
     );
 

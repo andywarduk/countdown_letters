@@ -1,4 +1,5 @@
 mod dictionary;
+mod numformat;
 mod results;
 mod solver;
 
@@ -6,9 +7,10 @@ use std::io;
 
 use clap::Parser;
 
-use dictionary::load_words_from_file;
-use results::print_results;
-use solver::{find_words, SolverArgs};
+use crate::dictionary::load_words_from_file;
+use crate::numformat::NumFormat;
+use crate::results::print_results;
+use crate::solver::{find_words, SolverArgs};
 
 /// Countdown letters game solver
 #[derive(Parser, Default)]
@@ -18,7 +20,7 @@ struct Args {
     #[clap(value_parser = validate_letters)]
     letters: String,
 
-    /// Dictionary file
+    /// Word list file
     #[clap(
         short = 'd',
         long = "dictionary",
@@ -33,6 +35,14 @@ struct Args {
     /// Allow letters to be used more than once
     #[clap(short = 'r', long = "reuse")]
     reuse_letters: bool,
+
+    /// Verbose output
+    #[clap(short = 'v', long = "verbose")]
+    verbose: bool,
+
+    /// Debug output
+    #[clap(long = "debug")]
+    debug: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -40,18 +50,29 @@ fn main() -> io::Result<()> {
     let args = Args::parse();
 
     // Print details
-    println!(
-        "{} letters: {}",
-        args.letters.len(),
-        args.letters
-            .chars()
-            .map(|c| c.to_string())
-            .collect::<Vec<String>>()
-            .join(" ")
-    );
+    if args.verbose {
+        println!(
+            "{} letters: {}",
+            args.letters.len(),
+            args.letters
+                .chars()
+                .map(|c| c.to_string())
+                .collect::<Vec<String>>()
+                .join(" ")
+        );
+    }
 
     // Load words
     let dictionary = load_words_from_file(&args.dictionary_file, args.letters.len())?;
+
+    if args.verbose {
+        println!(
+            "{} words loaded, dictionary size {} ({} bytes)",
+            dictionary.word_count().num_format(),
+            dictionary.len().num_format(),
+            dictionary.mem_usage().num_format(),
+        );
+    }
 
     // Find words
     let words = find_words(SolverArgs {
@@ -59,6 +80,7 @@ fn main() -> io::Result<()> {
         dictionary: &dictionary,
         min_len: args.min_len,
         reuse_letters: args.reuse_letters,
+        debug: args.debug,
     });
 
     // Print results
@@ -110,6 +132,7 @@ mod tests {
             dictionary: &dictionary,
             min_len: 1,
             reuse_letters: false,
+            debug: false,
         });
 
         // Should be one found
@@ -136,6 +159,7 @@ mod tests {
             dictionary: &dictionary,
             min_len: 1,
             reuse_letters: false,
+            debug: false,
         });
 
         words.sort();

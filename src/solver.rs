@@ -1,17 +1,19 @@
 use std::collections::HashSet;
 
-use crate::dictionary::{LetterNext, LetterVec};
+use crate::dictionary::{Dictionary, LetterNext};
 
 /// Arguments for the countdown letters solver
 pub struct SolverArgs<'a> {
     /// String of letters to use (must be upper case A-Z)
     pub letters: &'a str,
     /// Dictionary to use
-    pub dictionary: &'a Vec<LetterVec>,
+    pub dictionary: &'a Dictionary,
     /// Minimum length word to find
     pub min_len: u8,
     /// Letters can be reused flag
     pub reuse_letters: bool,
+    /// Debug output
+    pub debug: bool,
 }
 
 pub fn find_words(args: SolverArgs) -> Vec<String> {
@@ -71,18 +73,17 @@ fn find_words_rec(
         chosen.push(chosen_letter);
 
         // Walk the dictionary
-        let dict_elem = args.dictionary[dict_elem][chosen_letter as usize];
+        let dict_elem = args.dictionary.lookup_elem_letter(dict_elem, chosen_letter);
+
+        if args.debug {
+            debug_lookup(chosen, dict_elem);
+        }
 
         // End of a word?
         match dict_elem {
             LetterNext::End | LetterNext::EndNext(_) => {
                 if chosen.len() >= args.min_len as usize {
-                    // SAFETY: Guaranteed to be upper case ASCII characters only
-                    let string = chosen
-                        .iter()
-                        .map(|e| (*e + b'A') as char)
-                        .collect::<String>();
-                    result.insert(string);
+                    result.insert(chosen_string(chosen));
                 }
             }
             _ => (),
@@ -105,4 +106,30 @@ fn find_words_rec(
             chosen.set_len(chosen.len() - 1);
         }
     }
+}
+
+#[inline]
+fn chosen_string(chosen: &[u8]) -> String {
+    chosen
+        .iter()
+        .map(|e| (*e + b'A') as char)
+        .collect::<String>()
+}
+
+#[cold]
+fn debug_lookup(chosen: &[u8], dict_elem: LetterNext) {
+    let string = chosen_string(chosen);
+    let indent = string.len() - 1;
+
+    println!(
+        "{:indent$}{} ({})",
+        "",
+        string,
+        match dict_elem {
+            LetterNext::None => "x",
+            LetterNext::Next(_) => "n",
+            LetterNext::End => "e",
+            LetterNext::EndNext(_) => "en",
+        }
+    );
 }

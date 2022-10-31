@@ -3,6 +3,32 @@ use std::{
     io::{self, BufRead, BufReader, Read},
 };
 
+pub struct Dictionary {
+    words: usize,
+    tree: Vec<LetterVec>,
+}
+
+impl Dictionary {
+    pub fn word_count(&self) -> usize {
+        self.words
+    }
+
+    pub fn len(&self) -> usize {
+        self.tree.len()
+    }
+
+    pub fn mem_usage(&self) -> usize {
+        self.len() * std::mem::size_of::<LetterNext>()
+    }
+
+    #[inline]
+    pub fn lookup_elem_letter(&self, elem: usize, letter: u8) -> LetterNext {
+        self.tree[elem][letter as usize]
+    }
+}
+
+type LetterVec = [LetterNext; 26];
+
 #[derive(Copy, Clone, Debug)]
 pub enum LetterNext {
     None,
@@ -11,9 +37,7 @@ pub enum LetterNext {
     EndNext(u32),
 }
 
-pub type LetterVec = [LetterNext; 26];
-
-pub fn load_words_from_file(file: &str, max_len: usize) -> io::Result<Vec<LetterVec>> {
+pub fn load_words_from_file(file: &str, max_len: usize) -> io::Result<Dictionary> {
     // Open word file
     let word_file = File::open(file)?;
 
@@ -26,15 +50,16 @@ pub fn load_words_from_file(file: &str, max_len: usize) -> io::Result<Vec<Letter
 pub fn load_words_from_bufreader<R>(
     bufreader: BufReader<R>,
     max_len: usize,
-) -> io::Result<Vec<LetterVec>>
+) -> io::Result<Dictionary>
 where
     R: Read,
 {
-    let mut result = Vec::new();
+    let mut words = 0;
+    let mut tree = Vec::new();
 
     let empty = [LetterNext::None; 26];
 
-    result.push(empty);
+    tree.push(empty);
 
     // Iterate file lines
     for line in bufreader.lines() {
@@ -52,30 +77,33 @@ where
             continue;
         }
 
+        // Add this word to the tree
+        words += 1;
+
         let mut cur_elem = 0;
         for (i, c) in line.chars().enumerate() {
             let letter = lchar_to_elem(c);
 
             if i == length - 1 {
                 // Last character
-                result[cur_elem][letter] = match result[cur_elem][letter] {
+                tree[cur_elem][letter] = match tree[cur_elem][letter] {
                     LetterNext::None => LetterNext::End,
                     LetterNext::Next(n) => LetterNext::EndNext(n),
                     _ => panic!("Duplicate word {}", line),
                 }
             } else {
                 // Mid character
-                cur_elem = match result[cur_elem][letter] {
+                cur_elem = match tree[cur_elem][letter] {
                     LetterNext::None => {
-                        result.push(empty);
-                        let e = result.len() - 1;
-                        result[cur_elem][letter] = LetterNext::Next(e as u32);
+                        tree.push(empty);
+                        let e = tree.len() - 1;
+                        tree[cur_elem][letter] = LetterNext::Next(e as u32);
                         e
                     }
                     LetterNext::End => {
-                        result.push(empty);
-                        let e = result.len() - 1;
-                        result[cur_elem][letter] = LetterNext::EndNext(e as u32);
+                        tree.push(empty);
+                        let e = tree.len() - 1;
+                        tree[cur_elem][letter] = LetterNext::EndNext(e as u32);
                         e
                     }
                     LetterNext::Next(e) | LetterNext::EndNext(e) => e as usize,
@@ -84,7 +112,7 @@ where
         }
     }
 
-    Ok(result)
+    Ok(Dictionary { words, tree })
 }
 
 #[inline]
