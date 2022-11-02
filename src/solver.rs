@@ -76,7 +76,7 @@ fn find_words_rec(
         let dict_elem = args.dictionary.lookup_elem_letter(dict_elem, chosen_letter);
 
         if args.debug {
-            debug_lookup(chosen, dict_elem);
+            debug_lookup(chosen, &dict_elem);
         }
 
         // End of a word?
@@ -117,19 +117,9 @@ fn chosen_string(chosen: &[u8]) -> String {
 }
 
 #[cold]
-fn debug_lookup(chosen: &[u8], dict_elem: LetterNext) {
+fn debug_lookup(chosen: &[u8], dict_elem: &LetterNext) {
     let string = chosen_string(chosen);
     let indent = string.len() - 1;
 
-    println!(
-        "{:indent$}{} ({})",
-        "",
-        string,
-        match dict_elem {
-            LetterNext::None => "x",
-            LetterNext::Next(_) => "n",
-            LetterNext::End => "e",
-            LetterNext::EndNext(_) => "en",
-        }
-    );
+    println!("{:indent$}{} ({:?})", "", string, dict_elem);
 }

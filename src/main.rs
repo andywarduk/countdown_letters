@@ -8,7 +8,6 @@ use std::io;
 use clap::Parser;
 
 use crate::dictionary::load_words_from_file;
-use crate::numformat::NumFormat;
 use crate::results::print_results;
 use crate::solver::{find_words, SolverArgs};
 
@@ -63,16 +62,7 @@ fn main() -> io::Result<()> {
     }
 
     // Load words
-    let dictionary = load_words_from_file(&args.dictionary_file, args.letters.len())?;
-
-    if args.verbose {
-        println!(
-            "{} words loaded, dictionary size {} ({} bytes)",
-            dictionary.word_count().num_format(),
-            dictionary.len().num_format(),
-            dictionary.mem_usage().num_format(),
-        );
-    }
+    let dictionary = load_words_from_file(&args.dictionary_file, args.letters.len(), args.verbose)?;
 
     // Find words
     let words = find_words(SolverArgs {
@@ -124,7 +114,7 @@ mod tests {
     fn rust() {
         // Create dictionary with one word in it "rust"
         let bufreader = BufReader::new("rust".as_bytes());
-        let dictionary = load_words_from_bufreader(bufreader, 4).unwrap();
+        let dictionary = load_words_from_bufreader(bufreader, 4, false).unwrap();
 
         // Find words
         let words = find_words(SolverArgs {
@@ -132,7 +122,7 @@ mod tests {
             dictionary: &dictionary,
             min_len: 1,
             reuse_letters: false,
-            debug: false,
+            debug: true,
         });
 
         // Should be one found
@@ -151,7 +141,7 @@ mod tests {
             xxx\n\
             ";
         let bufreader = BufReader::new(dict.as_bytes());
-        let dictionary = load_words_from_bufreader(bufreader, 5).unwrap();
+        let dictionary = load_words_from_bufreader(bufreader, 5, false).unwrap();
 
         // Find words
         let mut words = find_words(SolverArgs {
@@ -159,7 +149,7 @@ mod tests {
             dictionary: &dictionary,
             min_len: 1,
             reuse_letters: false,
-            debug: false,
+            debug: true,
         });
 
         words.sort();
