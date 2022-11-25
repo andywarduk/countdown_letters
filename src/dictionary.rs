@@ -1,6 +1,8 @@
 use std::fs::{read_link, symlink_metadata, File};
-use std::io::{self, BufRead, BufReader, Read};
+use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::PathBuf;
+
+use flate2::read::GzDecoder;
 
 use crate::numformat::NumFormat;
 
@@ -46,22 +48,30 @@ pub fn load_words_from_file(file: &str, max_len: usize, verbose: bool) -> io::Re
     }
 
     // Open word file
-    let word_file = File::open(&path_buf)?;
+    let mut word_file = File::open(&path_buf)?;
 
-    // Create buf reader for the file
-    let bufreader = BufReader::new(word_file);
+    // Read the first two bytes
+    let mut hdr = [0u8; 2];
+    let hdr_read = word_file.read(&mut hdr)?;
+    word_file.seek(SeekFrom::Start(0))?;
+
+    // Check fror gzip signature
+    let bufreader: Box<dyn BufRead> = if hdr_read == 2 && hdr[0] == 0x1f && hdr[1] == 0x8b {
+        // gzip compressed file
+        Box::new(BufReader::new(GzDecoder::new(word_file)))
+    } else {
+        // Create buf reader for the file
+        Box::new(BufReader::new(word_file))
+    };
 
     load_words_from_bufreader(bufreader, max_len, verbose)
 }
 
-pub fn load_words_from_bufreader<R>(
-    bufreader: BufReader<R>,
+pub fn load_words_from_bufreader(
+    bufreader: Box<dyn BufRead>,
     max_len: usize,
     verbose: bool,
-) -> io::Result<Dictionary>
-where
-    R: Read,
-{
+) -> io::Result<Dictionary> {
     let mut tree = Vec::new();
 
     let empty = [LetterNext::None; 26];

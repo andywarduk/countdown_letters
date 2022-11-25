@@ -4,6 +4,7 @@ mod results;
 mod solver;
 
 use std::io;
+use std::path::Path;
 
 use clap::Parser;
 
@@ -23,7 +24,7 @@ struct Args {
     #[clap(
         short = 'd',
         long = "dictionary",
-        default_value = "/etc/dictionaries-common/words"
+        default_value_t = default_dict(),
     )]
     dictionary_file: String,
 
@@ -48,33 +49,38 @@ fn main() -> io::Result<()> {
     // Parse command line arguments
     let args = Args::parse();
 
-    // Print details
-    if args.verbose {
-        println!(
-            "{} letters: {}",
-            args.letters.len(),
-            args.letters
-                .chars()
-                .map(|c| c.to_string())
-                .collect::<Vec<String>>()
-                .join(" ")
-        );
+    if args.dictionary_file.is_empty() {
+        eprintln!("No dictionary file given and none of the default dictionaries could be found.");
+    } else {
+        // Print details
+        if args.verbose {
+            println!(
+                "{} letters: {}",
+                args.letters.len(),
+                args.letters
+                    .chars()
+                    .map(|c| c.to_string())
+                    .collect::<Vec<String>>()
+                    .join(" ")
+            );
+        }
+
+        // Load words
+        let dictionary =
+            load_words_from_file(&args.dictionary_file, args.letters.len(), args.verbose)?;
+
+        // Find words
+        let words = find_words(SolverArgs {
+            letters: &args.letters,
+            dictionary: &dictionary,
+            min_len: args.min_len,
+            reuse_letters: args.reuse_letters,
+            debug: args.debug,
+        });
+
+        // Print results
+        print_results(words);
     }
-
-    // Load words
-    let dictionary = load_words_from_file(&args.dictionary_file, args.letters.len(), args.verbose)?;
-
-    // Find words
-    let words = find_words(SolverArgs {
-        letters: &args.letters,
-        dictionary: &dictionary,
-        min_len: args.min_len,
-        reuse_letters: args.reuse_letters,
-        debug: args.debug,
-    });
-
-    // Print results
-    print_results(words);
 
     Ok(())
 }
@@ -99,6 +105,20 @@ fn validate_letters(s: &str) -> Result<String, String> {
     Ok(ustring)
 }
 
+fn default_dict() -> String {
+    dict_valid("words.txt.gz").unwrap_or_else(|| {
+        dict_valid("/etc/dictionaries-common/words").unwrap_or_else(|| "".into())
+    })
+}
+
+fn dict_valid(dict: &str) -> Option<String> {
+    if Path::new(dict).is_file() {
+        Some(dict.into())
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use dictionary::{load_words_from_bufreader, LetterNext};
@@ -115,7 +135,7 @@ mod tests {
     fn rust() {
         // Create dictionary with one word in it "rust"
         let bufreader = BufReader::new("rust".as_bytes());
-        let dictionary = load_words_from_bufreader(bufreader, 4, false).unwrap();
+        let dictionary = load_words_from_bufreader(Box::new(bufreader), 4, false).unwrap();
 
         // Find words
         let words = find_words(SolverArgs {
@@ -142,7 +162,7 @@ mod tests {
             xxx\n\
             ";
         let bufreader = BufReader::new(dict.as_bytes());
-        let dictionary = load_words_from_bufreader(bufreader, 5, false).unwrap();
+        let dictionary = load_words_from_bufreader(Box::new(bufreader), 5, false).unwrap();
 
         // Find words
         let mut words = find_words(SolverArgs {
