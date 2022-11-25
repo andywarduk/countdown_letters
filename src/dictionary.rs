@@ -1,8 +1,6 @@
-use std::{
-    fs::{read_link, symlink_metadata, File},
-    io::{self, BufRead, BufReader, Read},
-    path::PathBuf,
-};
+use std::fs::{read_link, symlink_metadata, File};
+use std::io::{self, BufRead, BufReader, Read};
+use std::path::PathBuf;
 
 use crate::numformat::NumFormat;
 

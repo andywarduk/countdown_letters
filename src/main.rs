@@ -101,9 +101,10 @@ fn validate_letters(s: &str) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use dictionary::{load_words_from_bufreader, LetterNext};
     use io::BufReader;
+
+    use super::*;
 
     #[test]
     fn size_checks() {
