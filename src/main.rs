@@ -121,7 +121,7 @@ fn dict_valid(dict: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use dictionary::{load_words_from_bufreader, LetterNext};
+    use dictionary::{load_words_from_bufread, LetterNext};
     use io::BufReader;
 
     use super::*;
@@ -135,7 +135,7 @@ mod tests {
     fn rust() {
         // Create dictionary with one word in it "rust"
         let bufreader = BufReader::new("rust".as_bytes());
-        let dictionary = load_words_from_bufreader(Box::new(bufreader), 4, false).unwrap();
+        let dictionary = load_words_from_bufread(Box::new(bufreader), 4, false).unwrap();
 
         // Find words
         let words = find_words(SolverArgs {
@@ -162,11 +162,11 @@ mod tests {
             xxx\n\
             ";
         let bufreader = BufReader::new(dict.as_bytes());
-        let dictionary = load_words_from_bufreader(Box::new(bufreader), 5, false).unwrap();
+        let dictionary = load_words_from_bufread(Box::new(bufreader), 5, false).unwrap();
 
         // Find words
         let mut words = find_words(SolverArgs {
-            letters: "TRUSY",
+            letters: "TRUS",
             dictionary: &dictionary,
             min_len: 1,
             reuse_letters: false,
@@ -175,6 +175,6 @@ mod tests {
 
         words.sort();
 
-        assert_eq!(words, vec!["RUST", "RUSTY", "RUT", "RUTS"]);
+        assert_eq!(words, vec!["RUST", "RUT", "RUTS"]);
     }
 }

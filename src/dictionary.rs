@@ -55,7 +55,7 @@ pub fn load_words_from_file(file: &str, max_len: usize, verbose: bool) -> io::Re
     let hdr_read = word_file.read(&mut hdr)?;
     word_file.seek(SeekFrom::Start(0))?;
 
-    // Check fror gzip signature
+    // Check for gzip signature
     let bufreader: Box<dyn BufRead> = if hdr_read == 2 && hdr[0] == 0x1f && hdr[1] == 0x8b {
         // gzip compressed file
         Box::new(BufReader::new(GzDecoder::new(word_file)))
@@ -64,11 +64,11 @@ pub fn load_words_from_file(file: &str, max_len: usize, verbose: bool) -> io::Re
         Box::new(BufReader::new(word_file))
     };
 
-    load_words_from_bufreader(bufreader, max_len, verbose)
+    load_words_from_bufread(bufreader, max_len, verbose)
 }
 
-pub fn load_words_from_bufreader(
-    bufreader: Box<dyn BufRead>,
+pub fn load_words_from_bufread(
+    bufread: Box<dyn BufRead>,
     max_len: usize,
     verbose: bool,
 ) -> io::Result<Dictionary> {
@@ -84,7 +84,7 @@ pub fn load_words_from_bufreader(
     tree.push(empty);
 
     // Iterate file lines
-    for line in bufreader.lines() {
+    for line in bufread.lines() {
         let line = line?;
 
         lines += 1;
