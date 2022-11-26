@@ -1,12 +1,17 @@
+#![warn(missing_docs)]
+
+//! Word list and loader functions
+
 use std::fs::{read_link, symlink_metadata, File};
 use std::io::prelude::*;
 use std::io::{self, BufReader};
 use std::path::PathBuf;
+use std::time::Instant;
 
 use flate2::bufread::GzDecoder;
+use numformat::NumFormat;
 
-use crate::numformat::NumFormat;
-
+/// Dictionary structure
 pub struct Dictionary {
     words: usize,
     tree: Vec<LetterVec>,
@@ -60,6 +65,9 @@ impl Dictionary {
         size: WordSizeConstraint,
         verbose: bool,
     ) -> io::Result<Self> {
+        // Get start time
+        let start_time = Instant::now();
+
         // Fill the bufreader buffer
         let buf = bufread.fill_buf()?;
 
@@ -71,17 +79,19 @@ impl Dictionary {
             }
 
             Self::new_from_bufread_internal(
+                start_time,
                 &mut BufReader::new(GzDecoder::new(bufread)),
                 size,
                 verbose,
             )
         } else {
-            Self::new_from_bufread_internal(bufread, size, verbose)
+            Self::new_from_bufread_internal(start_time, bufread, size, verbose)
         }
     }
 
     /// Loads a dictionary from an entity implementing BufRead
     fn new_from_bufread_internal(
+        start_time: Instant,
         bufread: &mut dyn BufRead,
         size: WordSizeConstraint,
         verbose: bool,
@@ -163,6 +173,11 @@ impl Dictionary {
 
         if verbose {
             println!(
+                "Dictionary read in {} seconds",
+                start_time.elapsed().as_secs_f64().num_format_sigdig(2)
+            );
+
+            println!(
                 "{} total words, ({} too short, {} too long, {} not all lower case)",
                 lines.num_format(),
                 too_short.num_format(),
@@ -209,35 +224,45 @@ impl Dictionary {
     }
 }
 
+/// Word size constraints to use when loading a dictionary
 pub struct WordSizeConstraint {
     min: usize,
     max: usize,
 }
 
 impl WordSizeConstraint {
-    pub fn new() -> Self {
-        Self {
-            min: 0,
-            max: usize::MAX,
-        }
-    }
-
+    /// Sets the minimum length for a word
     pub fn set_min(&mut self, min: usize) {
         self.min = min;
     }
 
+    /// Sets the maximum length for a word
     pub fn set_max(&mut self, max: usize) {
         self.max = max;
     }
 }
 
+impl Default for WordSizeConstraint {
+    fn default() -> Self {
+        Self {
+            min: 0,
+            max: usize::MAX,
+        }
+    }
+}
+
 type LetterVec = [LetterNext; 26];
 
+/// Word end and next tree node indicators
 #[derive(Copy, Clone, Debug)]
 pub enum LetterNext {
+    /// No word with this letter in this position
     None,
+    /// Pointer to next tree node
     Next(u32),
+    /// End of word indicator
     End,
+    /// End of word and pointer to next tree node
     EndNext(u32),
 }
 
@@ -283,8 +308,7 @@ mod tests {
     #[test]
     fn dict1() {
         // Create dictionary with one word in it "rust"
-        let dictionary =
-            Dictionary::new_from_string("rust", WordSizeConstraint::new(), false).unwrap();
+        let dictionary = Dictionary::new_from_string("rust", Default::default(), false).unwrap();
 
         test_dict1(dictionary)
     }
@@ -293,7 +317,7 @@ mod tests {
     fn dict1z() {
         // Create dictionary from compressed data with one word in it "rust"
         let dictionary =
-            Dictionary::new_from_bytes(&gz_dict("rust"), WordSizeConstraint::new(), false).unwrap();
+            Dictionary::new_from_bytes(&gz_dict("rust"), Default::default(), false).unwrap();
 
         test_dict1(dictionary)
     }
@@ -325,7 +349,7 @@ mod tests {
     fn dict2() {
         // Create dictionary with two words, "rust" and "rusty"
         let dictionary =
-            Dictionary::new_from_string("rust\nrusty", WordSizeConstraint::new(), false).unwrap();
+            Dictionary::new_from_string("rust\nrusty", Default::default(), false).unwrap();
 
         test_dict2(dictionary);
     }
@@ -334,8 +358,7 @@ mod tests {
     fn dict2z() {
         // Create dictionary from compressed data with two words, "rust" and "rusty"
         let dictionary =
-            Dictionary::new_from_bytes(&gz_dict("rust\nrusty"), WordSizeConstraint::new(), false)
-                .unwrap();
+            Dictionary::new_from_bytes(&gz_dict("rust\nrusty"), Default::default(), false).unwrap();
 
         test_dict2(dictionary);
     }

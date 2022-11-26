@@ -1,6 +1,10 @@
+#![warn(missing_docs)]
+
+//! Countdown letters game solver
+
 use std::collections::HashSet;
 
-use crate::dictionary::{Dictionary, LetterNext};
+use dictionary::{Dictionary, LetterNext};
 
 /// Arguments for the countdown letters solver
 pub struct SolverArgs<'a> {
@@ -14,6 +18,7 @@ pub struct SolverArgs<'a> {
     pub debug: bool,
 }
 
+/// Find words in the provides dictionary using the provided letters
 pub fn find_words(args: SolverArgs) -> Vec<String> {
     let mut result = HashSet::new();
 
@@ -124,8 +129,9 @@ fn debug_lookup(chosen: &[u8], dict_elem: &LetterNext) {
 
 #[cfg(test)]
 mod tests {
+    use dictionary::{Dictionary, LetterNext};
+
     use super::*;
-    use crate::dictionary::{Dictionary, LetterNext, WordSizeConstraint};
 
     #[test]
     fn size_checks() {
@@ -135,8 +141,7 @@ mod tests {
     #[test]
     fn rust() {
         // Create dictionary with one word in it "rust"
-        let dictionary =
-            Dictionary::new_from_string("rust", WordSizeConstraint::new(), false).unwrap();
+        let dictionary = Dictionary::new_from_string("rust", Default::default(), false).unwrap();
 
         // Find words
         let words = find_words(SolverArgs {
@@ -161,8 +166,7 @@ mod tests {
             rusty\n\
             xxx\n\
             ";
-        let dictionary =
-            Dictionary::new_from_string(dict, WordSizeConstraint::new(), false).unwrap();
+        let dictionary = Dictionary::new_from_string(dict, Default::default(), false).unwrap();
 
         // Find words
         let mut words = find_words(SolverArgs {

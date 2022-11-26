@@ -1,17 +1,19 @@
-mod dictionary;
-mod numformat;
+#![warn(missing_docs)]
+
+//! Countdown letters game solver
+
 mod results;
-mod solver;
 
 use std::io;
 use std::path::Path;
+use std::time::Instant;
 
 use clap::Parser;
-use dictionary::WordSizeConstraint;
+use dictionary::{Dictionary, WordSizeConstraint};
+use numformat::NumFormat;
+use solver::{find_words, SolverArgs};
 
-use crate::dictionary::Dictionary;
 use crate::results::print_results;
-use crate::solver::{find_words, SolverArgs};
 
 /// Countdown letters game solver
 #[derive(Parser, Default)]
@@ -76,7 +78,7 @@ fn main() -> io::Result<()> {
     }
 
     // Load words
-    let mut size = WordSizeConstraint::new();
+    let mut size = WordSizeConstraint::default();
 
     size.set_min(args.min_len as usize);
 
@@ -87,12 +89,21 @@ fn main() -> io::Result<()> {
     let dictionary = Dictionary::new_from_file(&args.dictionary_file, size, args.verbose)?;
 
     // Find words
+    let start_time = Instant::now();
+
     let words = find_words(SolverArgs {
         letters: &args.letters,
         dictionary: &dictionary,
         reuse_letters: args.reuse_letters,
         debug: args.debug,
     });
+
+    if args.verbose {
+        println!(
+            "Search took {} seconds",
+            start_time.elapsed().as_secs_f64().num_format_sigdig(2)
+        );
+    }
 
     // Print results
     print_results(words);

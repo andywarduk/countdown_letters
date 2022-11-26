@@ -1,0 +1,16 @@
+[package]
+name = "solve"
+description = "Solve a countdown letters game"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.0.18", features = ["derive"] }
+terminal_size = "0.2.1"
+
+dictionary = { path = "../dictionary" }
+solver = { path = "../solver" }
+numformat = { path = "../numformat" }
