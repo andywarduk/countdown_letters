@@ -1,8 +1,9 @@
 use std::fs::{read_link, symlink_metadata, File};
-use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom};
+use std::io::prelude::*;
+use std::io::{self, BufReader};
 use std::path::PathBuf;
 
-use flate2::read::GzDecoder;
+use flate2::bufread::GzDecoder;
 
 use crate::numformat::NumFormat;
 
@@ -12,21 +13,221 @@ pub struct Dictionary {
 }
 
 impl Dictionary {
+    /// Loads a dictionary from a file
+    pub fn new_from_file(file: &str, size: WordSizeConstraint, verbose: bool) -> io::Result<Self> {
+        let path_buf = PathBuf::from(file);
+
+        if verbose {
+            println!("Loading words from file {}", file_spec(&path_buf)?);
+        }
+
+        // Create buf reader for the file
+        Self::new_from_bufread(&mut BufReader::new(File::open(&path_buf)?), size, verbose)
+    }
+
+    /// Loads a dictionary from a string
+    #[allow(dead_code)]
+    pub fn new_from_string(
+        string: &str,
+        size: WordSizeConstraint,
+        verbose: bool,
+    ) -> io::Result<Self> {
+        if verbose {
+            println!("Loading words from string '{}'", string);
+        }
+
+        Self::new_from_bufread(&mut BufReader::new(string.as_bytes()), size, verbose)
+    }
+
+    /// Loads a dictionary from a byte array
+    #[allow(dead_code)]
+    pub fn new_from_bytes(
+        bytes: &[u8],
+        size: WordSizeConstraint,
+        verbose: bool,
+    ) -> io::Result<Self> {
+        if verbose {
+            println!("Loading words from byte array (length {})", bytes.len());
+        }
+
+        Self::new_from_bufread(&mut BufReader::new(bytes), size, verbose)
+    }
+
+    /// Loads a dictionary from an entity implementing BufRead
+    /// Handles gzip compressed buffers
+    pub fn new_from_bufread(
+        bufread: &mut dyn BufRead,
+        size: WordSizeConstraint,
+        verbose: bool,
+    ) -> io::Result<Self> {
+        // Fill the bufreader buffer
+        let buf = bufread.fill_buf()?;
+
+        // Check for gzip signature
+        if buf.len() >= 2 && buf[0] == 0x1f && buf[1] == 0x8b {
+            // gzip compressed file
+            if verbose {
+                println!("Decompressing word list");
+            }
+
+            Self::new_from_bufread_internal(
+                &mut BufReader::new(GzDecoder::new(bufread)),
+                size,
+                verbose,
+            )
+        } else {
+            Self::new_from_bufread_internal(bufread, size, verbose)
+        }
+    }
+
+    /// Loads a dictionary from an entity implementing BufRead
+    fn new_from_bufread_internal(
+        bufread: &mut dyn BufRead,
+        size: WordSizeConstraint,
+        verbose: bool,
+    ) -> io::Result<Self> {
+        let mut tree = Vec::new();
+
+        let empty = [LetterNext::None; 26];
+
+        let mut lines: usize = 0;
+        let mut words: usize = 0;
+        let mut too_short: usize = 0;
+        let mut too_long: usize = 0;
+        let mut wrong_case: usize = 0;
+
+        tree.push(empty);
+
+        // Iterate file lines
+        for line in bufread.lines() {
+            let line = line?;
+
+            lines += 1;
+
+            // Check length
+            let length = line.len();
+
+            if length > size.max {
+                too_long += 1;
+                continue;
+            }
+
+            if length < size.min {
+                too_short += 1;
+                continue;
+            }
+
+            // Make sure word consists of all lower case ascii characters
+            if !is_ascii_lower(&line) {
+                wrong_case += 1;
+                continue;
+            }
+
+            // Add this word to the tree
+            words += 1;
+
+            let mut cur_elem = 0;
+
+            for (i, c) in line.chars().enumerate() {
+                let letter = lchar_to_elem(c);
+
+                if i == length - 1 {
+                    // Last character
+                    tree[cur_elem][letter] = match tree[cur_elem][letter] {
+                        LetterNext::None => LetterNext::End,
+                        LetterNext::Next(n) => LetterNext::EndNext(n),
+                        _ => panic!("Duplicate word {}", line),
+                    }
+                } else {
+                    // Mid character
+                    cur_elem = match tree[cur_elem][letter] {
+                        LetterNext::None => {
+                            tree.push(empty);
+                            let e = tree.len() - 1;
+                            tree[cur_elem][letter] = LetterNext::Next(e as u32);
+                            e
+                        }
+                        LetterNext::End => {
+                            tree.push(empty);
+                            let e = tree.len() - 1;
+                            tree[cur_elem][letter] = LetterNext::EndNext(e as u32);
+                            e
+                        }
+                        LetterNext::Next(e) | LetterNext::EndNext(e) => e as usize,
+                    };
+                }
+            }
+        }
+
+        let dictionary = Self { words, tree };
+
+        if verbose {
+            println!(
+                "{} total words, ({} too short, {} too long, {} not all lower case)",
+                lines.num_format(),
+                too_short.num_format(),
+                too_long.num_format(),
+                wrong_case.num_format()
+            );
+
+            println!(
+                "Dictionary words {}, tree nodes {} ({} bytes of {} allocated)",
+                dictionary.word_count().num_format(),
+                dictionary.tree_node_count().num_format(),
+                dictionary.tree_mem_usage().num_format(),
+                dictionary.tree_mem_alloc().num_format(),
+            );
+        }
+
+        Ok(dictionary)
+    }
+
+    /// Returns the number of words stored in the dictionary
     pub fn word_count(&self) -> usize {
         self.words
     }
 
-    pub fn len(&self) -> usize {
+    /// Returns the size of the dictionary tree
+    pub fn tree_node_count(&self) -> usize {
         self.tree.len()
     }
 
-    pub fn mem_usage(&self) -> usize {
-        self.len() * std::mem::size_of::<LetterNext>()
+    /// Returns the used memory of the dictionary tree in bytes
+    pub fn tree_mem_usage(&self) -> usize {
+        self.tree_node_count() * std::mem::size_of::<LetterNext>()
     }
 
+    /// Returns the allocated memory of the dictionary tree in bytes
+    pub fn tree_mem_alloc(&self) -> usize {
+        self.tree.capacity() * std::mem::size_of::<LetterNext>()
+    }
+
+    /// Looks up the letter number (0-25) in the dictionary tree node
     #[inline]
-    pub fn lookup_elem_letter(&self, elem: usize, letter: u8) -> LetterNext {
+    pub fn lookup_elem_letter_num(&self, elem: usize, letter: u8) -> LetterNext {
         self.tree[elem][letter as usize]
+    }
+}
+
+pub struct WordSizeConstraint {
+    min: usize,
+    max: usize,
+}
+
+impl WordSizeConstraint {
+    pub fn new() -> Self {
+        Self {
+            min: 0,
+            max: usize::MAX,
+        }
+    }
+
+    pub fn set_min(&mut self, min: usize) {
+        self.min = min;
+    }
+
+    pub fn set_max(&mut self, max: usize) {
+        self.max = max;
     }
 }
 
@@ -38,126 +239,6 @@ pub enum LetterNext {
     Next(u32),
     End,
     EndNext(u32),
-}
-
-pub fn load_words_from_file(file: &str, max_len: usize, verbose: bool) -> io::Result<Dictionary> {
-    let path_buf = PathBuf::from(file);
-
-    if verbose {
-        println!("Loading words from {}", file_spec(&path_buf)?);
-    }
-
-    // Open word file
-    let mut word_file = File::open(&path_buf)?;
-
-    // Read the first two bytes
-    let mut hdr = [0u8; 2];
-    let hdr_read = word_file.read(&mut hdr)?;
-    word_file.seek(SeekFrom::Start(0))?;
-
-    // Check for gzip signature
-    let bufreader: Box<dyn BufRead> = if hdr_read == 2 && hdr[0] == 0x1f && hdr[1] == 0x8b {
-        // gzip compressed file
-        Box::new(BufReader::new(GzDecoder::new(word_file)))
-    } else {
-        // Create buf reader for the file
-        Box::new(BufReader::new(word_file))
-    };
-
-    load_words_from_bufread(bufreader, max_len, verbose)
-}
-
-pub fn load_words_from_bufread(
-    bufread: Box<dyn BufRead>,
-    max_len: usize,
-    verbose: bool,
-) -> io::Result<Dictionary> {
-    let mut tree = Vec::new();
-
-    let empty = [LetterNext::None; 26];
-
-    let mut lines: usize = 0;
-    let mut words: usize = 0;
-    let mut too_short: usize = 0;
-    let mut wrong_case: usize = 0;
-
-    tree.push(empty);
-
-    // Iterate file lines
-    for line in bufread.lines() {
-        let line = line?;
-
-        lines += 1;
-
-        // Check length
-        let length = line.len();
-
-        if length < 2 || length > max_len {
-            too_short += 1;
-            continue;
-        }
-
-        // Make sure word consists of all lower case ascii characters
-        if !is_ascii_lower(&line) {
-            wrong_case += 1;
-            continue;
-        }
-
-        // Add this word to the tree
-        words += 1;
-
-        let mut cur_elem = 0;
-
-        for (i, c) in line.chars().enumerate() {
-            let letter = lchar_to_elem(c);
-
-            if i == length - 1 {
-                // Last character
-                tree[cur_elem][letter] = match tree[cur_elem][letter] {
-                    LetterNext::None => LetterNext::End,
-                    LetterNext::Next(n) => LetterNext::EndNext(n),
-                    _ => panic!("Duplicate word {}", line),
-                }
-            } else {
-                // Mid character
-                cur_elem = match tree[cur_elem][letter] {
-                    LetterNext::None => {
-                        tree.push(empty);
-                        let e = tree.len() - 1;
-                        tree[cur_elem][letter] = LetterNext::Next(e as u32);
-                        e
-                    }
-                    LetterNext::End => {
-                        tree.push(empty);
-                        let e = tree.len() - 1;
-                        tree[cur_elem][letter] = LetterNext::EndNext(e as u32);
-                        e
-                    }
-                    LetterNext::Next(e) | LetterNext::EndNext(e) => e as usize,
-                };
-            }
-        }
-    }
-
-    let dictionary = Dictionary { words, tree };
-
-    if verbose {
-        println!(
-            "{} total lines, ({} too short, {} not all lower case)",
-            lines.num_format(),
-            too_short.num_format(),
-            wrong_case.num_format()
-        );
-
-        println!(
-            "Dictionary words {}, size {} ({} bytes)",
-            dictionary.word_count().num_format(),
-            dictionary.len().num_format(),
-            dictionary.mem_usage().num_format(),
-        );
-    }
-
-    Ok(dictionary)
 }
 
 fn file_spec(path: &PathBuf) -> io::Result<String> {
@@ -184,4 +265,105 @@ fn lchar_to_elem(c: char) -> usize {
 #[inline]
 fn is_ascii_lower(s: &str) -> bool {
     s.chars().all(|c| c.is_ascii_lowercase())
+}
+
+#[cfg(test)]
+mod tests {
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+
+    use super::*;
+
+    fn gz_dict(string: &str) -> Vec<u8> {
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(string.as_bytes()).unwrap();
+        encoder.finish().unwrap()
+    }
+
+    #[test]
+    fn dict1() {
+        // Create dictionary with one word in it "rust"
+        let dictionary =
+            Dictionary::new_from_string("rust", WordSizeConstraint::new(), false).unwrap();
+
+        test_dict1(dictionary)
+    }
+
+    #[test]
+    fn dict1z() {
+        // Create dictionary from compressed data with one word in it "rust"
+        let dictionary =
+            Dictionary::new_from_bytes(&gz_dict("rust"), WordSizeConstraint::new(), false).unwrap();
+
+        test_dict1(dictionary)
+    }
+
+    fn test_dict1(dictionary: Dictionary) {
+        assert_eq!(dictionary.word_count(), 1);
+        assert_eq!(dictionary.tree_node_count(), 4);
+        assert_eq!(dictionary.tree_mem_usage(), 4 * 8);
+
+        assert!(matches!(
+            dictionary.lookup_elem_letter_num(0, b'R' - b'A'),
+            LetterNext::Next(1)
+        ));
+        assert!(matches!(
+            dictionary.lookup_elem_letter_num(1, b'U' - b'A'),
+            LetterNext::Next(2)
+        ));
+        assert!(matches!(
+            dictionary.lookup_elem_letter_num(2, b'S' - b'A'),
+            LetterNext::Next(3)
+        ));
+        assert!(matches!(
+            dictionary.lookup_elem_letter_num(3, b'T' - b'A'),
+            LetterNext::End
+        ));
+    }
+
+    #[test]
+    fn dict2() {
+        // Create dictionary with two words, "rust" and "rusty"
+        let dictionary =
+            Dictionary::new_from_string("rust\nrusty", WordSizeConstraint::new(), false).unwrap();
+
+        test_dict2(dictionary);
+    }
+
+    #[test]
+    fn dict2z() {
+        // Create dictionary from compressed data with two words, "rust" and "rusty"
+        let dictionary =
+            Dictionary::new_from_bytes(&gz_dict("rust\nrusty"), WordSizeConstraint::new(), false)
+                .unwrap();
+
+        test_dict2(dictionary);
+    }
+
+    fn test_dict2(dictionary: Dictionary) {
+        assert_eq!(dictionary.word_count(), 2);
+        assert_eq!(dictionary.tree_node_count(), 5);
+        assert_eq!(dictionary.tree_mem_usage(), 5 * 8);
+
+        assert!(matches!(
+            dictionary.lookup_elem_letter_num(0, b'R' - b'A'),
+            LetterNext::Next(1)
+        ));
+        assert!(matches!(
+            dictionary.lookup_elem_letter_num(1, b'U' - b'A'),
+            LetterNext::Next(2)
+        ));
+        assert!(matches!(
+            dictionary.lookup_elem_letter_num(2, b'S' - b'A'),
+            LetterNext::Next(3)
+        ));
+        assert!(matches!(
+            dictionary.lookup_elem_letter_num(3, b'T' - b'A'),
+            LetterNext::EndNext(4)
+        ));
+        assert!(matches!(
+            dictionary.lookup_elem_letter_num(4, b'Y' - b'A'),
+            LetterNext::End
+        ));
+    }
 }

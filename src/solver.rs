@@ -8,8 +8,6 @@ pub struct SolverArgs<'a> {
     pub letters: &'a str,
     /// Dictionary to use
     pub dictionary: &'a Dictionary,
-    /// Minimum length word to find
-    pub min_len: u8,
     /// Letters can be reused flag
     pub reuse_letters: bool,
     /// Debug output
@@ -73,7 +71,9 @@ fn find_words_rec(
         chosen.push(chosen_letter);
 
         // Walk the dictionary
-        let dict_elem = args.dictionary.lookup_elem_letter(dict_elem, chosen_letter);
+        let dict_elem = args
+            .dictionary
+            .lookup_elem_letter_num(dict_elem, chosen_letter);
 
         if args.debug {
             debug_lookup(chosen, &dict_elem);
@@ -82,9 +82,7 @@ fn find_words_rec(
         // End of a word?
         match dict_elem {
             LetterNext::End | LetterNext::EndNext(_) => {
-                if chosen.len() >= args.min_len as usize {
-                    result.insert(chosen_string(chosen));
-                }
+                result.insert(chosen_string(chosen));
             }
             _ => (),
         }
@@ -122,4 +120,60 @@ fn debug_lookup(chosen: &[u8], dict_elem: &LetterNext) {
     let indent = string.len() - 1;
 
     println!("{:indent$}{} ({:?})", "", string, dict_elem);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dictionary::{Dictionary, LetterNext, WordSizeConstraint};
+
+    #[test]
+    fn size_checks() {
+        assert_eq!(8, std::mem::size_of::<LetterNext>());
+    }
+
+    #[test]
+    fn rust() {
+        // Create dictionary with one word in it "rust"
+        let dictionary =
+            Dictionary::new_from_string("rust", WordSizeConstraint::new(), false).unwrap();
+
+        // Find words
+        let words = find_words(SolverArgs {
+            letters: "TRUS",
+            dictionary: &dictionary,
+            reuse_letters: false,
+            debug: true,
+        });
+
+        // Should be one found
+        assert_eq!(words, vec!["RUST"]);
+    }
+
+    #[test]
+    fn rusty() {
+        // Create dictionary with some rusty words in it
+        let dict = "\
+            aaa\n\
+            rut\n\
+            ruts\n\
+            rust\n\
+            rusty\n\
+            xxx\n\
+            ";
+        let dictionary =
+            Dictionary::new_from_string(dict, WordSizeConstraint::new(), false).unwrap();
+
+        // Find words
+        let mut words = find_words(SolverArgs {
+            letters: "TRUS",
+            dictionary: &dictionary,
+            reuse_letters: false,
+            debug: true,
+        });
+
+        words.sort();
+
+        assert_eq!(words, vec!["RUST", "RUT", "RUTS"]);
+    }
 }

@@ -7,8 +7,9 @@ use std::io;
 use std::path::Path;
 
 use clap::Parser;
+use dictionary::WordSizeConstraint;
 
-use crate::dictionary::load_words_from_file;
+use crate::dictionary::Dictionary;
 use crate::results::print_results;
 use crate::solver::{find_words, SolverArgs};
 
@@ -24,7 +25,7 @@ struct Args {
     #[clap(
         short = 'd',
         long = "dictionary",
-        default_value_t = default_dict(),
+        default_value_t = default_dict().into(),
     )]
     dictionary_file: String,
 
@@ -49,38 +50,52 @@ fn main() -> io::Result<()> {
     // Parse command line arguments
     let args = Args::parse();
 
+    // Check we have a dictionary
     if args.dictionary_file.is_empty() {
         eprintln!("No dictionary file given and none of the default dictionaries could be found.");
-    } else {
-        // Print details
-        if args.verbose {
-            println!(
-                "{} letters: {}",
-                args.letters.len(),
-                args.letters
-                    .chars()
-                    .map(|c| c.to_string())
-                    .collect::<Vec<String>>()
-                    .join(" ")
-            );
+        eprintln!("Default dictionaries are:");
+
+        for d in DICTS {
+            eprintln!("  {}", d);
         }
 
-        // Load words
-        let dictionary =
-            load_words_from_file(&args.dictionary_file, args.letters.len(), args.verbose)?;
-
-        // Find words
-        let words = find_words(SolverArgs {
-            letters: &args.letters,
-            dictionary: &dictionary,
-            min_len: args.min_len,
-            reuse_letters: args.reuse_letters,
-            debug: args.debug,
-        });
-
-        // Print results
-        print_results(words);
+        std::process::exit(1);
     }
+
+    // Print details
+    if args.verbose {
+        println!(
+            "{} letters: {}",
+            args.letters.len(),
+            args.letters
+                .chars()
+                .map(|c| c.to_string())
+                .collect::<Vec<String>>()
+                .join(" ")
+        );
+    }
+
+    // Load words
+    let mut size = WordSizeConstraint::new();
+
+    size.set_min(args.min_len as usize);
+
+    if !args.reuse_letters {
+        size.set_max(args.letters.len());
+    }
+
+    let dictionary = Dictionary::new_from_file(&args.dictionary_file, size, args.verbose)?;
+
+    // Find words
+    let words = find_words(SolverArgs {
+        letters: &args.letters,
+        dictionary: &dictionary,
+        reuse_letters: args.reuse_letters,
+        debug: args.debug,
+    });
+
+    // Print results
+    print_results(words);
 
     Ok(())
 }
@@ -105,10 +120,17 @@ fn validate_letters(s: &str) -> Result<String, String> {
     Ok(ustring)
 }
 
-fn default_dict() -> String {
-    dict_valid("words.txt.gz").unwrap_or_else(|| {
-        dict_valid("/etc/dictionaries-common/words").unwrap_or_else(|| "".into())
-    })
+const DICTS: [&str; 3] = [
+    "words.txt",
+    "words.txt.gz",
+    "/etc/dictionaries-common/words",
+];
+
+fn default_dict() -> &'static str {
+    DICTS
+        .iter()
+        .find(|d| dict_valid(d).is_some())
+        .unwrap_or(&"")
 }
 
 fn dict_valid(dict: &str) -> Option<String> {
@@ -116,65 +138,5 @@ fn dict_valid(dict: &str) -> Option<String> {
         Some(dict.into())
     } else {
         None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use dictionary::{load_words_from_bufread, LetterNext};
-    use io::BufReader;
-
-    use super::*;
-
-    #[test]
-    fn size_checks() {
-        assert_eq!(8, std::mem::size_of::<LetterNext>());
-    }
-
-    #[test]
-    fn rust() {
-        // Create dictionary with one word in it "rust"
-        let bufreader = BufReader::new("rust".as_bytes());
-        let dictionary = load_words_from_bufread(Box::new(bufreader), 4, false).unwrap();
-
-        // Find words
-        let words = find_words(SolverArgs {
-            letters: "TRUS",
-            dictionary: &dictionary,
-            min_len: 1,
-            reuse_letters: false,
-            debug: true,
-        });
-
-        // Should be one found
-        assert_eq!(words, vec!["RUST"]);
-    }
-
-    #[test]
-    fn rusty() {
-        // Create dictionary with some rusty words in it
-        let dict = "\
-            aaa\n\
-            rut\n\
-            ruts\n\
-            rust\n\
-            rusty\n\
-            xxx\n\
-            ";
-        let bufreader = BufReader::new(dict.as_bytes());
-        let dictionary = load_words_from_bufread(Box::new(bufreader), 5, false).unwrap();
-
-        // Find words
-        let mut words = find_words(SolverArgs {
-            letters: "TRUS",
-            dictionary: &dictionary,
-            min_len: 1,
-            reuse_letters: false,
-            debug: true,
-        });
-
-        words.sort();
-
-        assert_eq!(words, vec!["RUST", "RUT", "RUTS"]);
     }
 }
