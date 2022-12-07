@@ -1,6 +1,7 @@
 use std::cmp::{max, Ordering};
 
 use numformat::NumFormat;
+#[cfg(any(unix, windows))]
 use terminal_size::{terminal_size, Width};
 
 pub fn print_results(mut words: Vec<String>) {
@@ -42,11 +43,7 @@ pub fn print_results(mut words: Vec<String>) {
     }
 
     // Get terminal size
-    let term_width = if let Some((Width(w), _)) = terminal_size() {
-        w
-    } else {
-        0
-    };
+    let term_width = terminal_width();
 
     for (wordlen, start, end) in groups {
         println!("== {} letter words ({}) ==", wordlen, end - start);
@@ -61,4 +58,18 @@ pub fn print_results(mut words: Vec<String>) {
             println!("  {}", line.join("  "))
         }
     }
+}
+
+#[cfg(any(unix, windows))]
+fn terminal_width() -> u16 {
+    if let Some((Width(w), _)) = terminal_size() {
+        w
+    } else {
+        0
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
+fn terminal_width() -> u16 {
+    0
 }

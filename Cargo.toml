@@ -9,5 +9,4 @@ authors = ["Andy Ward (andy.ward.uk@gmail.com"]
 members = ["solve", "dictionary", "solver", "numformat"]
 
 [profile.release]
-debug = true
 lto = true

@@ -1,10 +1,15 @@
 #![warn(missing_docs)]
 
-//! This library wrappers num_format to format numbers according to the system locale
+//! This library wrappers num_format to format numbers according to the system locale.
+//! If a system locale is not available, en is used.
 
+#[cfg(any(unix, windows))]
 use lazy_static::lazy_static;
-use num_format::{Locale, SystemLocale, ToFormattedString};
+#[cfg(any(unix, windows))]
+use num_format::SystemLocale;
+use num_format::{Locale, ToFormattedString};
 
+#[cfg(any(unix, windows))]
 lazy_static! {
     static ref SYSTEM_LOCALE: Option<SystemLocale> = SystemLocale::default().ok();
 }
@@ -25,10 +30,14 @@ macro_rules! gen_int_impl {
     ($type:ty) => {
         impl NumFormat for $type {
             fn num_format(&self) -> String {
+                #[cfg(any(unix, windows))]
                 match &*SYSTEM_LOCALE {
                     Some(locale) => self.to_formatted_string(locale),
                     None => self.to_formatted_string(&Locale::en),
                 }
+
+                #[cfg(not(any(unix, windows)))]
+                self.to_formatted_string(&Locale::en)
             }
 
             fn num_format_with(&self, locale: &Locale) -> String {
@@ -91,7 +100,13 @@ fn format_float(flt: f64, sig_dig: Option<usize>, locale: Option<&Locale>) -> St
     let parts = full_str.split('.').collect::<Vec<&str>>();
     let int_part = parts[0].parse::<i64>().unwrap();
 
-    let (sep, int_part_str) = match (locale, &*SYSTEM_LOCALE) {
+    #[cfg(any(unix, windows))]
+    let sys_locale = &*SYSTEM_LOCALE;
+
+    #[cfg(not(any(unix, windows)))]
+    let sys_locale: &Option<Locale> = &None;
+
+    let (sep, int_part_str) = match (locale, sys_locale) {
         (Some(locale), _) => (locale.decimal(), int_part.to_formatted_string(locale)),
         (None, Some(locale)) => (locale.decimal(), int_part.to_formatted_string(locale)),
         (None, None) => (
