@@ -58,7 +58,7 @@ fn main() -> io::Result<()> {
         eprintln!("Default dictionaries are:");
 
         for d in DICTS {
-            eprintln!("  {}", d);
+            eprintln!("  {d}");
         }
 
         std::process::exit(1);

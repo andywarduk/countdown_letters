@@ -38,7 +38,7 @@ impl Dictionary {
         verbose: bool,
     ) -> io::Result<Self> {
         if verbose {
-            println!("Loading words from string '{}'", string);
+            println!("Loading words from string '{string}'");
         }
 
         Self::new_from_bufread(&mut BufReader::new(string.as_bytes()), size, verbose)
@@ -146,7 +146,7 @@ impl Dictionary {
                     tree[cur_elem][letter] = match tree[cur_elem][letter] {
                         LetterNext::None => LetterNext::End,
                         LetterNext::Next(n) => LetterNext::EndNext(n),
-                        _ => panic!("Duplicate word {}", line),
+                        _ => panic!("Duplicate word {line}"),
                     }
                 } else {
                     // Mid character

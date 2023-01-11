@@ -92,9 +92,9 @@ fn format_float(flt: f64, sig_dig: Option<usize>, locale: Option<&Locale>) -> St
                 }
             }
 
-            format!("{:.precision$}", flt, precision = prec)
+            format!("{flt:.prec$}")
         }
-        None => format!("{}", flt),
+        None => format!("{flt}"),
     };
 
     let parts = full_str.split('.').collect::<Vec<&str>>();
