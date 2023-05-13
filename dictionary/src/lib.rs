@@ -11,6 +11,22 @@ use std::time::Instant;
 use flate2::bufread::GzDecoder;
 use numformat::NumFormat;
 
+/// Word end and next tree node indicators
+#[derive(Copy, Clone, Debug)]
+pub enum LetterNext {
+    /// No word with this letter in this position
+    None,
+    /// Pointer to next tree node
+    Next(u32),
+    /// End of word indicator
+    End,
+    /// End of word and pointer to next tree node
+    EndNext(u32),
+}
+
+/// Vector of next letters
+type LetterVec = [LetterNext; 26];
+
 /// Dictionary structure
 pub struct Dictionary {
     words: usize,
@@ -23,7 +39,7 @@ impl Dictionary {
         let path_buf = PathBuf::from(file);
 
         if verbose {
-            println!("Loading words from file {}", file_spec(&path_buf)?);
+            println!("Loading words from file {}", Self::file_spec(&path_buf)?);
         }
 
         // Create buf reader for the file
@@ -128,7 +144,7 @@ impl Dictionary {
             }
 
             // Make sure word consists of all lower case ascii characters
-            if !is_ascii_lower(&line) {
+            if !Self::is_ascii_lower(&line) {
                 wrong_case += 1;
                 continue;
             }
@@ -139,7 +155,7 @@ impl Dictionary {
             let mut cur_elem = 0;
 
             for (i, c) in line.chars().enumerate() {
-                let letter = lchar_to_elem(c);
+                let letter = Self::lchar_to_elem(c);
 
                 if i == length - 1 {
                     // Last character
@@ -222,6 +238,32 @@ impl Dictionary {
     pub fn lookup_elem_letter_num(&self, elem: usize, letter: u8) -> LetterNext {
         self.tree[elem][letter as usize]
     }
+
+    #[inline]
+    fn lchar_to_elem(c: char) -> usize {
+        (c as u8 - b'a') as usize
+    }
+
+    #[inline]
+    fn is_ascii_lower(s: &str) -> bool {
+        s.chars().all(|c| c.is_ascii_lowercase())
+    }
+
+    fn file_spec(path: &PathBuf) -> io::Result<String> {
+        let meta = symlink_metadata(path)?;
+
+        if meta.is_symlink() {
+            let target = read_link(path)?;
+
+            Ok(format!(
+                "{} -> {}",
+                path.to_string_lossy(),
+                Self::file_spec(&target)?
+            ))
+        } else {
+            Ok(format!("{}", path.to_string_lossy()))
+        }
+    }
 }
 
 /// Word size constraints to use when loading a dictionary
@@ -249,47 +291,6 @@ impl Default for WordSizeConstraint {
             max: usize::MAX,
         }
     }
-}
-
-type LetterVec = [LetterNext; 26];
-
-/// Word end and next tree node indicators
-#[derive(Copy, Clone, Debug)]
-pub enum LetterNext {
-    /// No word with this letter in this position
-    None,
-    /// Pointer to next tree node
-    Next(u32),
-    /// End of word indicator
-    End,
-    /// End of word and pointer to next tree node
-    EndNext(u32),
-}
-
-fn file_spec(path: &PathBuf) -> io::Result<String> {
-    let meta = symlink_metadata(path)?;
-
-    if meta.is_symlink() {
-        let target = read_link(path)?;
-
-        Ok(format!(
-            "{} -> {}",
-            path.to_string_lossy(),
-            file_spec(&target)?
-        ))
-    } else {
-        Ok(format!("{}", path.to_string_lossy()))
-    }
-}
-
-#[inline]
-fn lchar_to_elem(c: char) -> usize {
-    (c as u8 - b'a') as usize
-}
-
-#[inline]
-fn is_ascii_lower(s: &str) -> bool {
-    s.chars().all(|c| c.is_ascii_lowercase())
 }
 
 #[cfg(test)]
