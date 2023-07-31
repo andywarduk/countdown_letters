@@ -9,4 +9,4 @@ authors.workspace = true
 [dependencies]
 flate2 = "1.0.25"
 
-numformat = { path = "../numformat" }
+numformat = { git = "https://github.com/andywarduk/numformat.git" }
