@@ -7,6 +7,6 @@ authors.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-flate2 = "1.0.25"
+flate2 = "1.0.28"
 
 numformat = { git = "https://github.com/andywarduk/numformat.git" }
