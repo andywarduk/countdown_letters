@@ -11,7 +11,7 @@ use std::time::Instant;
 use clap::Parser;
 use dictionary::{Dictionary, WordSizeConstraint};
 use numformat::NumFormat;
-use solver::{find_words, SolverArgs};
+use solver::{SolverArgs, find_words};
 
 use crate::results::print_results;
 

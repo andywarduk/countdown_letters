@@ -2,7 +2,7 @@
 
 //! Word list and loader functions
 
-use std::fs::{read_link, symlink_metadata, File};
+use std::fs::{File, read_link, symlink_metadata};
 use std::io::prelude::*;
 use std::io::{self, BufReader};
 use std::path::PathBuf;
@@ -295,8 +295,8 @@ impl Default for WordSizeConstraint {
 
 #[cfg(test)]
 mod tests {
-    use flate2::write::GzEncoder;
     use flate2::Compression;
+    use flate2::write::GzEncoder;
 
     use super::*;
 

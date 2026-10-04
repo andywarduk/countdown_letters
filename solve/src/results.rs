@@ -1,8 +1,8 @@
-use std::cmp::{max, Ordering};
+use std::cmp::{Ordering, max};
 
 use numformat::NumFormat;
 #[cfg(any(unix, windows))]
-use terminal_size::{terminal_size, Width};
+use terminal_size::{Width, terminal_size};
 
 pub fn print_results(mut words: Vec<String>) {
     // Sort words by longest first then alphabetical
